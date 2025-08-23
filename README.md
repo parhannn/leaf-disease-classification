@@ -27,3 +27,5 @@ pip install -r requirements.txt
 ```cmd
 flask --app app run --debug 
 ```
+
+---
