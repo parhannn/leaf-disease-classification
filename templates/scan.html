@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Detect Your Corn Leaf Disease</title>
+  <link rel="icon" href="/static/asset/img/logo.png" type="image/png">
+  <!-- Bootstrap CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  
+  <style>
+    body {
+      font-family: Tw Cen MT, Arial Black, sans-serif;
+      background-color: #f8f9fa;
+    }
+    .navbar-brand img {
+      height: 30px;
+      margin-right: 8px;
+    }
+    h2 {
+      font-family: 'Arial Black', sans-serif;
+      font-weight: bold;
+    }
+    #preview {
+      display: none;
+      margin-top: 15px;
+      border-radius: 10px;
+      width: 300px;
+      height: 300px;
+      object-fit: cover; /* Mengisi kotak, bisa crop gambar */
+}
+    .result-card {
+      display: none; /* awalnya disembunyikan */
+      margin-top: 20px;
+    }
+</style>
+
+</head>
+<body>
+  <!-- Header Navbar -->
+  <nav class="navbar navbar-expand-lg navbar-dark bg-success">
+    <div class="container-fluid">
+      <a class="navbar-brand d-flex align-items-center" href="#">
+        <img src="/static/asset/img/logo.png" alt="logo" class="icon">Kenali Penyakit Daun Jagung Anda
+      </a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" 
+              data-bs-target="#navbarNav" aria-controls="navbarNav" 
+              aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarNav">
+        <ul class="navbar-nav ms-auto">
+          <li class="nav-item">
+            <a class="nav-link" aria-current="page" href="{{ url_for('home') }}">Home</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="{{ url_for('about') }}">Tentang</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link active" href="{{ url_for('deteksi') }}">Deteksi</a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Konten -->
+  <div class="container mt-4">
+    <h2 class="text-center mb-4">Upload Gambar 🌿</h2>
+    <form id="uploadForm" class="card p-4 shadow-sm">
+      <input type="file" id="fileInput" name="file" accept="image/*" required class="form-control mb-3">
+      <button type="submit" class="btn btn-success w-100">Prediksi</button>
+    </form>
+
+    <!-- Card Hasil -->
+    <div id="resultCard" class="card shadow result-card">
+      <div class="card-body text-center">
+        <h5 class="card-title">📌 Hasil Prediksi</h5>
+        <!-- Preview gambar ditengah dan diperlebar -->
+        <img id="preview" alt="Preview Gambar" class="d-block mx-auto mb-3">
+        <p id="result" class="fw-bold"></p>
+        <p id="confidence" class="text-muted"></p>
+        <!-- Rekomendasi Agen Hayati -->
+        <h6 class="mt-4">🌱 Rekomendasi Pengendali:</h6>
+        <div id="rekomendasiContainer">
+          <p class="text-muted">Belum ada data rekomendasi.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bootstrap JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+  <script>
+    const form = document.getElementById("uploadForm");
+    const fileInput = document.getElementById("fileInput");
+    const preview = document.getElementById("preview");
+    const resultText = document.getElementById("result");
+    const confidenceText = document.getElementById("confidence");
+    const resultCard = document.getElementById("resultCard");
+
+    // Preview gambar saat dipilih
+    fileInput.addEventListener("change", () => {
+      const file = fileInput.files[0];
+      if (file) {
+        preview.src = URL.createObjectURL(file);
+      }
+    });
+
+    // Submit form → kirim ke Flask API
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const formData = new FormData();
+      formData.append("file", fileInput.files[0]);
+
+      // tampilkan card hasil
+      resultCard.style.display = "block";
+      resultText.innerText = "⏳ Sedang memproses...";
+      confidenceText.innerText = "";
+
+      try {
+        const response = await fetch("/predict", {
+          method: "POST",
+          body: formData
+        });
+
+        if (!response.ok) {
+          throw new Error("Gagal melakukan prediksi");
+        }
+
+        const data = await response.json();
+        resultText.innerText = data.prediction;
+        confidenceText.innerText = "✅ Confidence: " + (data.confidence * 100).toFixed(2) + "%";
+        preview.style.display = "block";
+        // tampilkan rekomendasi
+        const rekomendasiContainer = document.getElementById("rekomendasiContainer");
+        rekomendasiContainer.innerHTML = ""; // reset isi lama
+
+        if (data.rekomendasi && data.rekomendasi.length > 0) {
+          let table = `
+            <div class="table-responsive mt-3">
+              <table class="table table-bordered table-striped">
+                <thead class="table-success">
+                  <tr>
+                    <th>Agen Hayati</th>
+                    <th>Konsentrasi</th>
+                    <th>Metode Aplikasi</th>
+                    <th>Efektivitas</th>
+                  </tr>
+                </thead>
+                <tbody>
+          `;
+
+          data.rekomendasi.forEach(item => {
+            table += `
+              <tr>
+                <td>${item.agen_hayati}</td>
+                <td>${item.konsentrasi}</td>
+                <td>${item.metode_aplikasi}</td>
+                <td>${item.efektivitas}</td>
+              </tr>
+            `;
+          });
+
+          table += `</tbody></table></div>`;
+          rekomendasiContainer.innerHTML = table;
+        } else {
+          rekomendasiContainer.innerHTML = `<p class="text-danger">❌ Tidak ada data rekomendasi untuk penyakit ini.</p>`;
+        }
+      } catch (error) {
+        resultText.innerText = "❌ Terjadi kesalahan: " + error.message;
+        confidenceText.innerText = "";
+        preview.style.display = "none";
+      }
+    });
+  </script>
+</body>
+</html>
+<!-- Footer -->
+  <footer class="bg-success text-white text-center py-3 mt-5">
+    <p> 2025 Deteksi Penyakit Daun Jagung | Edukasi untuk Pertanian Berkelanjutan</p>
+  </footer>
+
+  <!-- Bootstrap JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
